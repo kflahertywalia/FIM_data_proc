@@ -19,6 +19,7 @@ library(lubridate)
 library(stringr)
 library(here)
 library(usethis)
+library(tbeptools)
 library(googledrive)
 drive_auth()
 
@@ -136,38 +137,18 @@ fld1 <- FIM_PhysicalMaster
 hab <- FIM_Habitat
              
 # Import hydrolab data
-hyd <- FIM_Hydrolab
+hyd <- FIM_HydroLab
 
 # Import FIM codes
 fim_codes <- FIM_ReferenceCodes
                      
-# Import TBNI data
-# Download the file
-download.file(
-  url = "https://raw.githubusercontent.com/username/repo/main/data/TampaBay_NektonIndexData.csv",
-  destfile = here("Data/TampaBay_NektonIndexData.csv")
-)
-# Read it in
-tbni <- read.csv("Data/TampaBay_NektonIndexData.csv")
-  arrange(reference)
-
-# Import seagrass data
-  # Download the file
-  download.file(
-    url = "https://github.com/tbep-tech/fim-seagrass/raw/refs/heads/main/data/fimsgdat.RData",
-    destfile = here("Data/fimsgdat.RData")
-  )
- 
-seagrass <- fimsgdat %>%
-  arrange(reference)
-
 # PROCESS PHYSICAL DATA========================================================
 
 # Create valid gear list
 valid_gears <- c(g1, g2, g3, g4, g5, g6)
 valid_gears <- valid_gears[valid_gears > 0]
 
-fld2 <- fld1 %>%
+fld <- fld1 %>%
   #Filter by bay
   filter(bay==b)%>%
   
@@ -175,7 +156,7 @@ fld2 <- fld1 %>%
   filter(type==t)%>%
   
   # Filter for designated years
-  filter(year >= b_yr & year <= e_yr) %>%
+ # filter(year %in% c(b_yr:e_yr))
   
   # Filter for designated projects
   filter(Project_1 %in% c(p1, p2, p3, p4) |
@@ -183,7 +164,7 @@ fld2 <- fld1 %>%
            Project_3 %in% c(p1, p2, p3, p4)) %>%
   
   # Filter for zones (all zones <= "Z")
-  filter(zone <= "Z") %>%
+#  filter(zone <= "Z") %>%
   
   # Combine similar gear types
   mutate(
@@ -240,43 +221,6 @@ fld2 <- fld1 %>%
   filter(gr %in% valid_gears) %>%
   
   arrange(reference)
-
-# MERGE WITH TBNI AND SEAGRASS DATA============================================
-
-tbni2 <- fld2 %>%
-  left_join(tbni, by = "reference") %>%
-  left_join(seagrass, by = "reference")
-
-# Check for missing TBNI scores
-tbni_ck <- tbni2 %>%
-  group_by(reference) %>%
-  slice(1) %>%
-  filter(is.na(TBNI_Score))
-
-# Export TBNI check
-write_csv(tbni_ck, paste0(out, "../Checks/tbni_check.csv"))
-
-# Check for missing seagrass management area data
-sg_chk <- tbni2 %>%
-  group_by(reference) %>%
-  slice(1) %>%
-  filter(is.na(sgyear)) %>%
-  select(reference, latitude, longitude, year, sgyear, acres, mngacre, 
-         FLUCCSCODE, month, gear, TB_seg, season, TBNI_Score, areas)
-
-# Export seagrass check
-write_csv(sg_chk, paste0(out, "../Checks/sg_chk.csv"))
-
-# Final field dataset with TBNI and seagrass management zones
-fld <- tbni2 %>%
-  filter(!is.na(TBNI_Score), !is.na(sgyear))
-
-# Select variables to export
-fld_exp <- fld %>%
-  select(all_of(c(var0, var1, var2)[c(var0, var1, var2) %in% names(fld)]))
-
-# Export combined field, TBNI, and seagrass data
-write_csv(fld_exp, paste0(out, "phy_tbni_sgrs.csv"))
 
 # Create retention list
 ret <- fld %>%
