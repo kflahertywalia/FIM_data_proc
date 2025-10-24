@@ -58,8 +58,9 @@ g4 <- -1
 g5 <- -1
 g6 <- -1
 
-# Select zones to be retained (all zones)
-# Zone filter will be applied as: zone <= "Z"
+# Select zones to be retained (<="Z" all zones, or select specific zones)
+# Zone filter will be applied as: 
+zone <= "Z"
 
 # Variable lists
 var0 <- c("reference", "bio_reference", "species", "number")
@@ -71,17 +72,14 @@ var1 <- c("date", "starttime", "gear", "rep", "latitude", "longitude", "zone", "
           "totalshorecover", "shoredistance", "bankdistance",
           "distance_to_edge", "seagrass_habitat_descriptor",
           "dist_to_MHTM", "dist_to_ShoreType", "dist_to_shore",
-          "intermittent_land", "total_over_site", "TotalShoreCover", "SAM", "tide", "CloudCover",
-          "FLUCCSCODE", "acres", "areas", "mngacre")
+          "intermittent_land", "total_over_site", "TotalShoreCover", "SAM")
 
 var2 <- c("month", "year", "gr", "effort", "cf", "slope", "TBEP_seg",
           "temperature", "salinity", "dissolvedO2", "sal_sd",
           "temp_surf", "sal_surf", "do2_surf",
           "bmud", "bsan", "bstr", "bunk", "bottom", "season", "sgyear",
           "Man", "Ter", "Str", "Eme", "shore", "ovr_wtf", "ind_wtf", "ovr_per", "ind_per",
-          "SAV", "Alg", "Non", "HA", "TH", "RU", "bveg", "DominantVeg",
-          "TBNI_Score", "ScoreNumTaxa", "ScoreShannon", "ScoreTaxaSelect", 
-          "ScoreTaxaBenthic", "ScoreNumGuilds")
+          "SAV", "Alg", "Non", "HA", "TH", "RU", "bveg", "DominantVeg")
 
 # Assign bay names
 bay_names <- list(
@@ -156,15 +154,15 @@ fld <- fld1 %>%
   filter(type==t)%>%
   
   # Filter for designated years
- # filter(year %in% c(b_yr:e_yr))
+ filter(year %in% c(b_yr:e_yr))
   
   # Filter for designated projects
   filter(Project_1 %in% c(p1, p2, p3, p4) |
            Project_2 %in% c(p1, p2, p3, p4) |
            Project_3 %in% c(p1, p2, p3, p4)) %>%
   
-  # Filter for zones (all zones <= "Z")
-#  filter(zone <= "Z") %>%
+  # Filter for zones
+  filter(zone) %>%
   
   # Combine similar gear types
   mutate(
@@ -189,7 +187,7 @@ fld <- fld1 %>%
       TRUE ~ NA_real_
     ),
     
-    # Calculate effort for each gear type
+    # Calculate effort (in 100m2) for each gear type
     effort = case_when(
       gr == 2 ~ 31.17/100,                                      # 6.1-m seine
       gr == 5 ~ 10.1/100,                                       # 9.1-m seine
@@ -630,13 +628,6 @@ hab_combined <- btype4 %>%
          SAV, Alg, Non, HA, TH, RU, bveg, DominantVeg,
          Man, Ter, Str, Eme, shore, ovr_per, ind_per)
 
-# PROCESS WEATHER DATA==========================================================
-
-wth_processed <- wth %>%
-  filter(Beg_end == "B") %>%
-  arrange(reference) %>%
-  inner_join(ret, by = "reference") %>%
-  select(reference, CloudCover, Tide)
 
 # PROCESS BIOLOGY NUMBER DATA===================================================
 
