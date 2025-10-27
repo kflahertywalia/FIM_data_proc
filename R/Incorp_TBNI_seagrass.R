@@ -1,4 +1,19 @@
-# Import TBNI data
+# Load required libraries
+library(dplyr)
+library(tidyr)
+library(readr)
+library(lubridate)
+library(stringr)
+library(here)
+library(tbeptools)
+
+#Setup========================================================================
+sgs_keep <- c("FLUCCSCODE", "acres", "areas", "mngacre")
+tbni_keep <- c("TBNI_Score", "ScoreNumTaxa", "ScoreShannon", "ScoreTaxaSelect", 
+"ScoreTaxaBenthic", "ScoreNumGuilds")
+
+#Import data==================================================================
+# TBNI data
 # Download the file
 download.file(
   url = "https://raw.githubusercontent.com/username/repo/main/data/TampaBay_NektonIndexData.csv",
@@ -8,7 +23,7 @@ download.file(
 tbni <- read.csv("Data/TampaBay_NektonIndexData.csv")
 arrange(reference)
 
-# Import seagrass data
+# Seagrass data
 # Download the file
 download.file(
   url = "https://github.com/tbep-tech/fim-seagrass/raw/refs/heads/main/data/fimsgdat.RData",
@@ -18,7 +33,7 @@ download.file(
 seagrass <- fimsgdat %>%
   arrange(reference)
 
-# MERGE WITH TBNI AND SEAGRASS DATA============================================
+# MERGE FIM COMMUNITY DATA WITH TBNI AND SEAGRASS DATA============================================
 
 tbni2 <- fld2 %>%
   left_join(tbni, by = "reference") %>%
