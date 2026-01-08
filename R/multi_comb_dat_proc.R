@@ -1,6 +1,6 @@
 # =============================================================================
 # Program: multi_comb_dat_proc.R
-# Programmer: Converted from SAS by Assistant, checked by Kerry Flaherty Walia
+# Programmer: Converted from SAS by AI (Claude), checked by Kerry Flaherty Walia
 # Original Author: Tim MacDonald, Kerry Flaherty Walia
 # Date: 27 January 2017
 # 
@@ -60,7 +60,7 @@ g6 <- -1
 
 # Select zones to be retained (<="Z" all zones, or select specific zones)
 # Zone filter will be applied as: 
-zone <= "Z"
+#Zone <= "Z"
 
 # Variable lists
 var0 <- c("reference", "bio_reference", "species", "number")
@@ -162,7 +162,7 @@ fld <- fld1 %>%
            Project_3 %in% c(p1, p2, p3, p4)) %>%
   
   # Filter for zones
-  filter(zone) %>%
+  filter(Zone) %>%
   
   # Combine similar gear types
   mutate(
