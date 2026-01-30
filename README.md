@@ -1,6 +1,6 @@
 # Processing FWC Fisheries-Independent Monitoring (FIM) Data
 
-The following code has been revised from SAS into R (see [notes](https://github.com/kflahertywalia/FIM_data_proc/blob/main/SAS_to_R_conversion_notes)) to process FIM data into multi-species and single-species datasets for analyses. Two different pathways are needed to process each type of dataset. Each processing pathway has options to subset the data further by monitoring type (pulled out as a integer (x) in the data set name; m for standard monitoring, d for directed sampling, null for all monitoring, etc.), gear type, location (zone, bay segment, river), years or months sampled, etc. Use the most appropriate subset for the data analyses you are conducting.
+The following code has been revised from SAS into R (see [notes](https://github.com/kflahertywalia/FIM_data_proc/blob/main/SAS_to_R_conversion_notes)) to process FIM data into multi-species (community data) and single-species datasets for analyses. Two different pathways are used to process each type of dataset. Each processing pathway has options to subset the data further by monitoring type (pulled out as a integer (x) in the data set name; m for standard monitoring, d for directed sampling, null for all monitoring, etc.), gear type, location (zone, bay segment, river), years or months sampled, etc. Use the most appropriate subset for the data analyses you are conducting.
 
 Before processing, download the most current FIM data from () and, if needed, run [***tb_subset.R***](https://github.com/kflahertywalia/FIM_data_proc/blob/main/R/tb_subset.R) to subset all FIM data into Tampa Bay only.
 
@@ -22,7 +22,7 @@ Before processing, download the most current FIM data from () and, if needed, ru
 
 ## Single-species data (to do):
 
-Run ***spp_comb_data_proc.R*** to process and subset the Tampa Bay data by species and desired length into two files:
+Run ***spp_comb_data_proc.R*** to process and subset the Tampa Bay data for one species and desired length into two files:
 
 -   Count data (tbx_c.R)
 
