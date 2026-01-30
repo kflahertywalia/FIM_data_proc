@@ -20,25 +20,18 @@ library(stringr)
 library(here)
 library(usethis)
 library(tbeptools)
-library(googledrive)
-drive_auth()
 
 # SETUP SECTION===============================================================
 
 # Bay to analyze
-b <- "tb"
+b <- "TB"
 
 # Data type to analyze
-t <- "m"
-
-# Pathways to databases
-# Location of multi-year historic data for all estuaries
-# Google Drive path = TBEP_General/09_Tech_Projects/Gulf Ecosystem Initiative/Data/FIM/FIM_Data/
-in1 <- drive_get("https://drive.google.com/drive/u/0/folders/1pAuF3vakLXWw8wvpMgkl9YU6TvhJkKiJ")
+t <- "M"
 
 # Select the years to be retained
-b_yr <- 1999
-e_yr <- 2023
+b_yr <- 1996
+e_yr <- 2024
 
 # Select the projects to be retained
 p1 <- "AM"
@@ -47,33 +40,24 @@ p3 <- "XX"
 p4 <- "XX"
 
 # Select the gears to be retained
-g1 <- 20
-g2 <- 19
-g3 <- -1
-g4 <- -1
-g5 <- -1
-g6 <- -1
+g <- c("020","019","023")
 
 # Select zones to be retained (<="Z" all zones, or select specific zones)
 # Zone filter will be applied as: 
-#Zone <= "Z"
+z <- c("A","B","C","D","E")
 
-# Variable lists
-var0 <- c("reference", "bio_reference", "species", "number")
+## Variable lists
+var0 <- c("Reference", "Scientificname","Commonname","species", "number","family","order","class")
 
-var1 <- c("date", "starttime", "gear", "rep", "latitude", "longitude", "zone", "grid",
-          "Project_1", "Project_2", "Project_3", "historic_reference",
-          "secchi_depth", "secchi_on_bottom", "stratum",
-          "startdepth", "bottomvegcover", "bycatchquantity",
-          "totalshorecover", "shoredistance", "bankdistance",
-          "distance_to_edge", "seagrass_habitat_descriptor",
-          "dist_to_MHTM", "dist_to_ShoreType", "dist_to_shore",
-          "intermittent_land", "total_over_site", "TotalShoreCover", "SAM")
+var1 <- c("Date", "StartTime", "Gear", "Rep", "Latitude", "Longitude", "Zone", "Grid",
+          "Project_1", "Project_2", "Project_3", "Secchi_depth", "Secchi_on_bottom", "Stratum",
+          "StartDepth", "BottomVegCover", "BycatchQuantity",
+          "TotalShoreCover", "ShoreDistance", "Dist_to_MHTM", "Dist_to_ShoreType", "Dist_to_Shore",
+          "Intermittent_land", "Total_Over_Site", "TotalShoreCover")
 
-var2 <- c("month", "year", "gr", "effort", "cf", "slope", "TBEP_seg",
-          "temperature", "salinity", "dissolvedO2", "sal_sd",
-          "temp_surf", "sal_surf", "do2_surf",
-          "bmud", "bsan", "bstr", "bunk", "bottom", "season", "sgyear",
+var2 <- c("Month", "Year", "gr", "effort", "cf", "slope", "TBEP_seg",
+          "Temperature", "Salinity", "DissolvedO2", "sal_sd",
+          "temp_surf", "sal_surf", "do2_surf","bmud", "bsan", "bstr", "bunk", "bottom", 
           "Man", "Ter", "Str", "Eme", "shore", "ovr_wtf", "ind_wtf", "ovr_per", "ind_per",
           "SAV", "Alg", "Non", "HA", "TH", "RU", "bveg", "DominantVeg")
 
@@ -89,227 +73,183 @@ bay_names <- list(
 
 bay <- bay_names[[toupper(b)]]
 
-# Assign sampling type
-type_names <- list(M = "stratified-random sampling", 
-                   D = "directed sampling", 
-                   F = "fixed station sampling")
-type <- type_names[[toupper(t)]]
-bay_typ <- paste(bay, type)
-
 # IMPORT DATA==================================================================
-
-# Downloading FIM RData from Google Drive folder
-# List all RData files (should include the following: FIM_BiologyCounts, FIM_BiologyLengths, 
-# FIM_Habitat, FIM_Hydrolab, FIM_PhysicalMaster, FIM_ReferenceCodes)
-files <- drive_ls(in1)
-rdata_files <- files[grepl("\\.RData$|\\.rda$", files$name, ignore.case = TRUE), ]
-# Create directory
-dir.create("data", showWarnings = FALSE)
-
-# Download all RData files
-for(i in 1:nrow(rdata_files)) {
-  drive_download(
-    file = rdata_files$id[i],
-    path = file.path("data", rdata_files$name[i]),
-    overwrite = TRUE
-  )
-  
-  # Optionally load immediately
-  load(file.path("data", rdata_files$name[i]))
-}
-
+#Bring in Tampa Bay subset populated to repository from tb_subset.R
 # Import biology number data
-num <- FIM_BiologyCounts
-               
+num <- TB_FIM_BiologyCounts
+
 # Import biology length data
-lng <- FIM_BiologyLengths
-                
+lng <- TB_FIM_BiologyLengths
+
 # Import physical data
-fld1 <- FIM_PhysicalMaster
-                
+fld1 <- TB_FIM_PhysicalMaster
+
 # Import habitat data
-hab <- FIM_Habitat
-             
+hab <- TB_FIM_Habitat
+
 # Import hydrolab data
-hyd <- FIM_HydroLab
+hyd <- TB_FIM_Hydrolab
 
 # Import FIM codes
 fim_codes <- FIM_ReferenceCodes
                      
 # PROCESS PHYSICAL DATA========================================================
 
-# Create valid gear list
-valid_gears <- c(g1, g2, g3, g4, g5, g6)
-valid_gears <- valid_gears[valid_gears > 0]
-
 fld <- fld1 %>%
-  #Filter by bay
-  filter(bay==b)%>%
-  
-  #Filter by type
-  filter(type==t)%>%
-  
-  # Filter for designated years
- filter(year %in% c(b_yr:e_yr))
-  
-  # Filter for designated projects
-  filter(Project_1 %in% c(p1, p2, p3, p4) |
-           Project_2 %in% c(p1, p2, p3, p4) |
-           Project_3 %in% c(p1, p2, p3, p4)) %>%
-  
-  # Filter for zones
-  filter(Zone) %>%
+  #Filter by bay, zone
+  filter(Bay==b, Zone %in% z, !is.na(Latitude) & !is.na(Longitude)) %>%
   
   # Combine similar gear types
   mutate(
     gr = case_when(
-      gear %in% c(1, 2) ~ 2,                                    # 6.1-m seine
-      gear == 5 ~ 5,                                            # 9.1-m seine
-      gear %in% c(11, 13, 20, 21, 25, 26, 29) | 
-        (gear >= 100 & gear <= 107) ~ 20,                       # 21-m offshore seines
-      gear == 20 & stratum == 'S' ~ 19,                        # 21-m offshore seine - beach stratum
-      gear %in% c(12, 22, 24, 27, 28) ~ 22,                    # 21-m beach seines
-      gear %in% c(10, 23) ~ 23,                                # 21-m boat seines
-      gear %in% c(153, 154) ~ 153,                             # 61-m blocknets
-      gear %in% c(155, 157, 158, 159, 160) ~ 160,              # 183-m haul seines
-      gear %in% c(170, 431) ~ 170,                             # 183-m purse seine
-      gear == 180 ~ 180,                                        # 61-m haul seine
-      (gear >= 204 & gear <= 209) | 
-        (gear >= 403 & gear <= 406) | 
-        (gear >= 409 & gear <= 410) ~ 207,                      # gillnets
-      gear %in% c(300, 301, 306) ~ 300,                        # 6.1-m otter trawls
-      gear %in% c(350, 351, 354) ~ 350,                        # 1m roving dropnets
-      gear == 436 ~ 436,                                        # 40m seine
-      TRUE ~ NA_real_
-    ),
+      Gear %in% c('001', '002') ~ '002',                                    # 6.1-m seine
+      Gear %in% c('005') ~ '005',                                            # 9.1-m seine
+      Gear %in% c('011', '013', '020', '021', '025', '026', '029',
+                  '100', '101', '102', '103', '104', '105', '106', '107') ~ '020', # 21-m offshore seines
+      Gear == '020' & Stratum == 'S' ~ '019',                        # 21-m offshore seine - beach stratum
+      Gear %in% c('012', '022', '024', '027', '028') ~ '022',                    # 21-m beach seines
+      Gear %in% c('010', '023') ~ '023',                                # 21-m boat seines
+      Gear %in% c('153', '154') ~ '153',                             # 61-m blocknets
+      Gear %in% c('155', '157', '158', '159', '160') ~ '160',              # 183-m haul seines
+      Gear %in% c('170', '431') ~ '170',                             # 183-m purse seine
+      Gear == '180' ~ '180',                                        # 61-m haul seine
+      Gear %in% c('204','205','206','207','208','209',
+                  '403','404','405','406','409','410') ~ '207',        # gillnets
+      Gear %in% c('300', '301', '306') ~ '300',                        # 6.1-m otter trawls
+      Gear %in% c('350', '351', '354') ~ '350',                        # 1m roving dropnets
+      Gear == '436' ~ '436',                                        # 40m seine
+      .default = Gear),
     
     # Calculate effort (in 100m2) for each gear type
     effort = case_when(
-      gr == 2 ~ 31.17/100,                                      # 6.1-m seine
-      gr == 5 ~ 10.1/100,                                       # 9.1-m seine
-      gr %in% c(19, 20) ~ 140/100,                             # 21-m offshore seines
-      gr == 22 ~ 338/100,                                       # 21-m beach seines
-      gr == 23 ~ 68/100,                                        # 21-m boat seines
-      gr == 160 ~ 4120/100,                                     # 183-m haul seine
-      gr == 170 ~ 2209/100,                                     # 183-m purse seine
-      gr == 180 ~ 465/100,                                      # 61-m haul seine
-      gr == 207 ~ soakhr + soakmin/60,                         # gillnets
-      gr == 300 ~ (dist_tow * 4 * 1853)/100,                   # 6.1-m otter trawls
-      gr == 350 ~ 1/100,                                        # 1m roving dropnets
-      gr == 436 ~ 180/100,                                      # 40m seine
+      gr == '002' ~ 31.17/100,                                      # 6.1-m seine
+      gr == '005' ~ 10.1/100,                                       # 9.1-m seine
+      gr %in% c('019', '020') ~ 140/100,                             # 21-m offshore seines
+      gr == '022' ~ 338/100,                                       # 21-m beach seines
+      gr == '023' ~ 68/100,                                        # 21-m boat seines
+      gr == '160' ~ 4120/100,                                     # 183-m haul seine
+      gr == '170' ~ 2209/100,                                     # 183-m purse seine
+      gr == '180' ~ 465/100,                                      # 61-m haul seine
+      #     gr == '207' ~ Soakhr + Soakmin/60,                         # gillnets
+      gr == '300' ~ (Dist_tow * 4 * 1853)/100,                   # 6.1-m otter trawls
+      gr == '350' ~ 1/100,                                        # 1m roving dropnets
+      gr == '436' ~ 180/100,                                      # 40m seine
       TRUE ~ NA_real_
     ),
     
-    # Create unique zone identifiers
-    z = paste0(bay, zone),
-    
     # Calculate slope
     slope = case_when(
-      gr %in% c(19, 20, 23, 160) ~ abs(startdepth - wng_dpth),
-      gr == 300 ~ abs(startdepth - enddepth),
+      gr %in% c('019', '020', '023', '160') ~ abs(StartDepth - Wng_dpth),
+      gr == '300' ~ abs(StartDepth - Enddepth),
       TRUE ~ NA_real_
     )
   ) %>%
   
   # Filter for designated gears
-  filter(gr %in% valid_gears) %>%
+  filter(gr %in% g) %>%
   
-  arrange(reference)
+  arrange(Reference)
 
 # Create retention list
 ret <- fld %>%
-  select(reference)
+  select(Reference)
+
+#Create GIS reference
+gis <- fld %>%
+  select(Reference,gr,Latitude,Longitude)
+# Export station location data
+write_csv(gis, here("Output", paste0(tolower(b),tolower(t),"_gis.csv")))
 
 # PROCESS HYDROLAB DATA=========================================================
 
 hyd1 <- hyd %>%
-  arrange(reference)
+  arrange(Reference)
 
 hyd_out <- hyd1 %>%
-  inner_join(ret, by = "reference")
+  inner_join(ret, by = "Reference")
 
 # Calculate mean temperature, salinity, and dissolved O2 by reference
 hyd_mean <- hyd_out %>%
-  filter(!is.na(temperature) | !is.na(salinity)) %>%
-  group_by(reference) %>%
+  filter(!is.na(Temperature) | !is.na(Salinity)) %>%
+  group_by(Reference) %>%
   summarise(
-    temperature = mean(temperature, na.rm = TRUE),
-    salinity = mean(salinity, na.rm = TRUE),
-    dissolvedO2 = mean(dissolvedO2, na.rm = TRUE),
+    Temperature = mean(Temperature, na.rm = TRUE),
+    Salinity = mean(Salinity, na.rm = TRUE),
+    DissolvedO2 = mean(DissolvedO2, na.rm = TRUE),
     .groups = "drop"
   )
 
 # Extract surface measurements (depth = 0.2)
 hyd3 <- hyd_out %>%
-  filter(depth == 0.2) %>%
-  select(reference, 
-         temp_surf = temperature, 
-         sal_surf = salinity, 
-         do2_surf = dissolvedO2)
+  filter(Depth == 0.2) %>%
+  select(Reference, 
+         temp_surf = Temperature, 
+         sal_surf = Salinity, 
+         do2_surf = DissolvedO2)
 
 # Merge hydrolab data with field data
 hyd_fld <- hyd_mean %>%
-  left_join(hyd3, by = "reference") %>%
-  left_join(select(fld, reference, zone), by = "reference") %>%
-  arrange(zone)
+  left_join(hyd3, by = "Reference") %>%
+  left_join(select(fld, Reference, Zone), by = "Reference") %>%
+  arrange(Zone)
 
 # Calculate salinity standard deviation by zone
 sal_sd <- hyd_fld %>%
-  group_by(zone) %>%
-  summarise(sal_sd = sd(salinity, na.rm = TRUE), .groups = "drop")
+  group_by(Zone) %>%
+  summarise(sal_sd = sd(Salinity, na.rm = TRUE), .groups = "drop")
 
 # Merge salinity sd back
 hyd <- hyd_fld %>%
-  left_join(sal_sd, by = "zone") %>%
-  select(reference, temperature, salinity, dissolvedO2, 
+  left_join(sal_sd, by = "Zone") %>%
+  select(Reference, Temperature, Salinity, DissolvedO2, 
          temp_surf, sal_surf, do2_surf, sal_sd) %>%
-  arrange(reference)
+  arrange(Reference)
 
 # PROCESS HABITAT DATA - BOTTOM TYPES===========================================
 
 # Extract bottom type codes
 bcodes <- fim_codes %>%
-  filter(fieldname == "BottomType") %>%
-  mutate(bcodes = code) %>%
-  select(code = bcodes, description, category) %>%
+  filter(FieldName == "BottomType") %>%
+  mutate(bcodes = Code) %>%
+  select(code = bcodes, Description, Category) %>%
   arrange(code)
 
 # Process bottom types
 btype1 <- hab %>%
-  inner_join(ret, by = "reference") %>%
-  mutate(code = bottomtype) %>%
+  inner_join(ret, by = "Reference") %>%
+  mutate(code = BottomType) %>%
   filter(!is.na(code), !code %in% c('N', '', '.')) %>%
-  mutate(habitat_record_id = as.numeric(habitat_record_id)) %>%
-  select(reference, habitat_record_id, code) %>%
+  mutate(Habitat_record_id = as.numeric(Habitat_record_id)) %>%
+  select(Reference, Habitat_record_id, code) %>%
   arrange(code)
 
 btype2 <- btype1 %>%
   left_join(bcodes, by = "code") %>%
   mutate(
     bottom_cat = ifelse(code == 'U', "bUnk", 
-                        paste0("b", substr(category, 1, 3))),
-    habitat_record_id = case_when(
-      habitat_record_id == 1 ~ 6,
-      habitat_record_id == 2 ~ 5,
-      habitat_record_id == 3 ~ 4,
-      habitat_record_id == 4 ~ 3,
-      habitat_record_id == 5 ~ 2,
-      habitat_record_id >= 6 ~ 1,
-      TRUE ~ habitat_record_id
+                        paste0("b", substr(Category, 1, 3))),
+    Habitat_record_id = case_when(
+      Habitat_record_id == 1 ~ 6,
+      Habitat_record_id == 2 ~ 5,
+      Habitat_record_id == 3 ~ 4,
+      Habitat_record_id == 4 ~ 3,
+      Habitat_record_id == 5 ~ 2,
+      Habitat_record_id >= 6 ~ 1,
+      TRUE ~ Habitat_record_id
     )
   ) %>%
-  arrange(reference, bottom_cat)
+  arrange(Reference, bottom_cat)
 
 # Keep only first occurrence of each bottom category per reference
 btype3 <- btype2 %>%
-  group_by(reference, bottom_cat) %>%
+  group_by(Reference, bottom_cat) %>%
   slice(1) %>%
   mutate(k = 1) %>%
   ungroup()
 
 # Transpose to wide format
 bstats1 <- btype3 %>%
-  select(reference, bottom_cat, k) %>%
+  select(Reference, bottom_cat, k) %>%
   pivot_wider(names_from = bottom_cat, values_from = k, values_fill = 0)
 
 # Create bottom type summary
@@ -336,29 +276,29 @@ btype4 <- bstats1 %>%
       TRUE ~ NA_character_
     )
   ) %>%
-  select(reference, bmud, bsan, bstr, bunk, bottom)
+  select(Reference, bmud, bsan, bstr, bunk, bottom)
 
 # PROCESS HABITAT DATA - BOTTOM VEGETATION=====================================
 
 # Extract bottom vegetation codes
 bvcodes <- fim_codes %>%
-  filter(fieldname == "BottomVeg") %>%
-  mutate(bvcodes = code) %>%
-  select(code = bvcodes, description, category) %>%
+  filter(FieldName == "BottomVeg") %>%
+  mutate(bvcodes = Code) %>%
+  select(code = bvcodes, Description, Category) %>%
   arrange(code)
 
 # Get bottom cover from field data
 bcover <- fld %>%
-  mutate(bottomvegcover = as.numeric(bottomvegcover),
-         bottomvegcover = ifelse(bottomvegcover == 101, 1, bottomvegcover)) %>%
-  select(reference, bottomvegcover)
+  mutate(BottomVegCover = as.numeric(BottomVegCover),
+         BottomVegCover = ifelse(BottomVegCover == 101, 1, BottomVegCover)) %>%
+  select(Reference, BottomVegCover)
 
 # Process bottom vegetation types
 bvtype1 <- hab %>%
-  inner_join(ret, by = "reference") %>%
+  inner_join(ret, by = "Reference") %>%
   mutate(
-    code = bottomveg,
-    habitat_record_id = as.numeric(habitat_record_id),
+    code = BottomVeg,
+    Habitat_record_id = as.numeric(Habitat_record_id),
     BottomVegRatio = as.numeric(BottomVegRatio)
   ) %>%
   filter(!is.na(code), !code %in% c("", " ", "  ", ".")) %>%
@@ -370,34 +310,34 @@ bvtype1 <- hab %>%
       TRUE ~ BottomVegRatio
     )
   ) %>%
-  filter(!(habitat_record_id >= 2 & code == "NO")) %>%
-  select(reference, code, BottomVegRatio) %>%
+  filter(!(Habitat_record_id >= 2 & code == "NO")) %>%
+  select(Reference, code, BottomVegRatio) %>%
   arrange(code)
 
 bvtype2 <- bvtype1 %>%
   left_join(bvcodes, by = "code") %>%
   mutate(
-    bveg_cat = substr(category, 1, 3),
+    bveg_cat = substr(Category, 1, 3),
     bveg_cat = ifelse(code %in% c('HA', 'TH', 'RU'), code, bveg_cat)
   ) %>%
-  arrange(reference, desc(BottomVegRatio))
+  arrange(Reference, desc(BottomVegRatio))
 
 # Keep dominant vegetation by reference
 bvtype_SAV <- bvtype2 %>%
-  group_by(reference) %>%
+  group_by(Reference) %>%
   slice(1) %>%
   mutate(
-    DominantVeg = ifelse(BottomVegRatio > 5, description, "SAV")
+    DominantVeg = ifelse(BottomVegRatio > 5, Description, "SAV")
   ) %>%
   ungroup() %>%
-  select(reference, DominantVeg)
+  select(Reference, DominantVeg)
 
 # Aggregate by vegetation category
 bvtype3 <- bvtype2 %>%
-  arrange(reference, bveg_cat) %>%
-  group_by(reference, bveg_cat) %>%
+  arrange(Reference, bveg_cat) %>%
+  group_by(Reference, bveg_cat) %>%
   summarise(k = sum(BottomVegRatio, na.rm = TRUE), .groups = "drop") %>%
-  arrange(reference, BottomVegRatio = k, bveg_cat)
+  arrange(Reference, BottomVegRatio = k, bveg_cat)
 
 # Transpose to wide format
 bvstats1 <- bvtype3 %>%
@@ -405,8 +345,8 @@ bvstats1 <- bvtype3 %>%
 
 # Merge and process vegetation data
 bvtype4 <- bvstats1 %>%
-  left_join(bcover, by = "reference") %>%
-  left_join(bvtype_SAV, by = "reference") %>%
+  left_join(bcover, by = "Reference") %>%
+  left_join(bvtype_SAV, by = "Reference") %>%
   mutate(
     # Initialize columns if they don't exist
     SAV = if("SAV" %in% names(.)) SAV else 0,
@@ -449,19 +389,19 @@ bvtype4 <- bvstats1 %>%
     ),
     
     # Handle missing bottom veg cover
-    bottomvegcover = case_when(
-      bottomvegcover < 0 & (SAV > 0 | Alg > 0 | TH > 0 | HA > 0 | RU > 0) ~ 1,
-      bottomvegcover < 0 & SAV == 0 & Alg == 0 & TH == 0 & HA == 0 & RU == 0 ~ 0,
-      TRUE ~ bottomvegcover
+    BottomVegCover = case_when(
+      BottomVegCover < 0 & (SAV > 0 | Alg > 0 | TH > 0 | HA > 0 | RU > 0) ~ 1,
+      BottomVegCover < 0 & SAV == 0 & Alg == 0 & TH == 0 & HA == 0 & RU == 0 ~ 0,
+      TRUE ~ BottomVegCover
     ),
     
     # Calculate weighted percentages
-    SAV = SAV/10 * bottomvegcover,
-    Alg = Alg/10 * bottomvegcover,
-    Non = Non/10 * bottomvegcover,
-    TH = TH/10 * bottomvegcover,
-    HA = HA/10 * bottomvegcover,
-    RU = RU/10 * bottomvegcover,
+    SAV = SAV/10 * BottomVegCover,
+    Alg = Alg/10 * BottomVegCover,
+    Non = Non/10 * BottomVegCover,
+    TH = TH/10 * BottomVegCover,
+    HA = HA/10 * BottomVegCover,
+    RU = RU/10 * BottomVegCover,
     
     # Categorize bottom vegetation
     bveg = case_when(
@@ -492,28 +432,29 @@ bvtype4 <- bvstats1 %>%
       TRUE ~ DominantVeg
     )
   ) %>%
-  select(reference, SAV, Alg, Non, HA, TH, RU, bveg, DominantVeg)
+  select(Reference, SAV, Alg, Non, HA, TH, RU, bveg, DominantVeg)
+
 
 # PROCESS HABITAT DATA - SHORE TYPES============================================
 
 # Extract shore type codes
 scodes <- fim_codes %>%
-  filter(fieldname == "ShoreType") %>%
-  mutate(scodes = code) %>%
-  select(code = scodes, description, category) %>%
+  filter(FieldName == "ShoreType") %>%
+  mutate(scodes = Code) %>%
+  select(code = scodes, Description, Category) %>%
   arrange(code)
 
 # Get shore cover from field data
 scover <- fld %>%
   mutate(TotalShoreCover = as.numeric(TotalShoreCover)) %>%
-  select(reference, TotalShoreCover)
+  select(Reference, TotalShoreCover)
 
 # Process shore types
 stype1 <- hab %>%
-  inner_join(ret, by = "reference") %>%
+  inner_join(ret, by = "Reference") %>%
   mutate(
-    code = shoretype,
-    habitat_record_id = as.numeric(habitat_record_id),
+    code = ShoreType,
+    Habitat_record_id = as.numeric(Habitat_record_id),
     ShoreTypeRatio = as.numeric(ShoreTypeRatio)
   ) %>%
   filter(!is.na(code), !code %in% c("  ", " ", ".", "UN", "NO")) %>%
@@ -527,24 +468,24 @@ stype1 <- hab %>%
     Over = ifelse(Over %in% c('1','2','3','4','5','6','7','8','9','10','YES'), 
                   'YES', 'NO')
   ) %>%
-  select(reference, habitat_record_id, code, ShoreTypeRatio, Inund, Over, level) %>%
+  select(Reference, Habitat_record_id, code, ShoreTypeRatio, Inund, Over, Level) %>%
   arrange(code)
 
-stype2 <- stype1 %>%stype2 <- stype1 %>%
+stype2 <- stype1 %>%
   left_join(scodes, by = "code") %>%
   mutate(
-    shore_cat = substr(category, 1, 3),
-    shore_cat = ifelse(category == "Manmade", "Str", shore_cat),  # Lump manmade with structure
+    shore_cat = substr(Category, 1, 3),
+    shore_cat = ifelse(Category == "Manmade", "Str", shore_cat),  # Lump manmade with structure
     inr = ifelse(Inund == "YES", 1, 0),
     ovr = ifelse(Over == "YES", 1, 0),
     ovr_wt = ovr * ShoreTypeRatio,
     ind_wt = inr * ShoreTypeRatio
   ) %>%
-  arrange(reference)
+  arrange(Reference)
 
 # Calculate inundated/overhanging percentages
 stype3 <- stype2 %>%
-  group_by(reference) %>%
+  group_by(Reference) %>%
   summarise(
     str = sum(ShoreTypeRatio, na.rm = TRUE),
     ovr_wt1 = sum(ovr_wt, na.rm = TRUE),
@@ -552,24 +493,24 @@ stype3 <- stype2 %>%
     .groups = "drop"
   ) %>%
   mutate(
-    ref_year = as.numeric(substr(reference, 4, 7)),
+    ref_year = as.numeric(substr(Reference, 4, 7)),
     ovr_wtf = ifelse(ref_year < 2001, NA, round(ovr_wt1/str, 3)),
     ind_wtf = ifelse(ref_year < 2001, NA, round(ind_wt1/str, 3))
   ) %>%
-  select(reference, ovr_wtf, ind_wtf)
+  select(Reference, ovr_wtf, ind_wtf)
 
 stype4 <- stype3 %>%
-  left_join(scover, by = "reference") %>%
+  left_join(scover, by = "Reference") %>%
   mutate(
-    ref_year = as.numeric(substr(reference, 4, 7)),
+    ref_year = as.numeric(substr(Reference, 4, 7)),
     ovr_per = ifelse(ref_year >= 2001, TotalShoreCover * ovr_wtf, NA),
     ind_per = ifelse(ref_year >= 2001, TotalShoreCover * ind_wtf, NA)
   ) %>%
-  select(reference, ovr_wtf, ind_wtf, ovr_per, ind_per)
+  select(Reference, ovr_wtf, ind_wtf, ovr_per, ind_per)
 
 # Aggregate shore types by category
 ststats_r <- stype2 %>%
-  group_by(reference, shore_cat) %>%
+  group_by(Reference, shore_cat) %>%
   summarise(count = sum(ShoreTypeRatio, na.rm = TRUE), .groups = "drop")
 
 # Transpose to wide format
@@ -578,7 +519,7 @@ ststats_r2 <- ststats_r %>%
 
 # Define basic shore types
 stype5 <- ststats_r2 %>%
-  left_join(scover, by = "reference") %>%
+  left_join(scover, by = "Reference") %>%
   mutate(
     # Initialize columns if they don't exist
     Man = if("Man" %in% names(.)) Man else 0,
@@ -613,26 +554,25 @@ stype5 <- ststats_r2 %>%
       TRUE ~ NA_character_
     )
   ) %>%
-  select(reference, Man, Ter, Str, Eme, shore, TotalShoreCover)
+  select(Reference, Man, Ter, Str, Eme, shore, TotalShoreCover)
 
 # Combine all habitat data
 hab_combined <- btype4 %>%
-  full_join(bvtype4, by = "reference") %>%
-  full_join(stype5, by = "reference") %>%
-  full_join(stype4, by = "reference") %>%
-  select(reference, bmud, bsan, bstr, bunk, bottom, 
+  full_join(bvtype4, by = "Reference") %>%
+  full_join(stype5, by = "Reference") %>%
+  full_join(stype4, by = "Reference") %>%
+  select(Reference, bmud, bsan, bstr, bunk, bottom, 
          SAV, Alg, Non, HA, TH, RU, bveg, DominantVeg,
          Man, Ter, Str, Eme, shore, ovr_per, ind_per)
 
-
 # PROCESS BIOLOGY NUMBER DATA===================================================
 
-fish1 <- num %>%
-  arrange(reference) %>%
-  inner_join(ret, by = "reference") %>%
+num_totals <- num %>%
+  arrange(Reference) %>%
+  inner_join(ret, by = "Reference") %>%
   mutate(
-    bay = substr(reference, 1, 2),
-    bio_reference = toupper(paste0(reference, SC, splitlevel)),
+    bay = substr(Reference, 1, 2),
+    bio_reference = toupper(paste0(Reference, SC)),
     
     # Clean NODCCODE
     nodccode = str_replace_all(NODCCODE, " ", ""),
@@ -645,12 +585,6 @@ fish1 <- num %>%
     order = substr(nodccode, 1, 4),
     class = substr(nodccode, 1, 2),
     
-    # Apply splitter data
-    Cells = ifelse(Splittype == 2, 1, Cells),
-    Number = ifelse(!is.na(Splittype), 
-                    Number * (Splittype^Splitlevel) / Cells, 
-                    Number),
-    
     # Combine certain genera
     species = case_when(
       genus %in% c('61890213', '87470104') ~ paste0(genus, "00"),
@@ -658,68 +592,31 @@ fish1 <- num %>%
       TRUE ~ species
     )
   ) %>%
-  select(reference, bio_reference, species, number = Number, species_record_id = Species_record_id) %>%
-  arrange(reference, species)
-
-# Total number of fish from each collection
-num_totals <- fish1 %>%
-  arrange(bio_reference, species) %>%
-  group_by(bio_reference, species) %>%
-  summarise(n = sum(number, na.rm = TRUE), .groups = "drop") %>%
-  left_join(select(fish1, bio_reference, reference) %>% distinct(), 
-            by = "bio_reference") %>%
-  arrange(reference)
+  arrange(Reference, species)
 
 # PROCESS LENGTH DATA===========================================================
 
-len1 <- lng %>%
-  mutate(
-    sl = as.numeric(length),
-    species_record_id = as.numeric(species_record_id),
-    length_record_id = as.numeric(length_record_id)
-  ) %>%
-  filter(!is.na(sl)) %>%
-  arrange(reference, species_record_id, length_record_id)
+# Subset length data
+len_final <- lng %>%
+  arrange(Reference) %>%
+  inner_join(ret, by = "Reference") 
 
-# Merge with fish data
-len_merged <- fish1 %>%
-  select(reference, species_record_id, bio_reference, species, number) %>%
-  inner_join(len1, by = c("reference", "species_record_id")) %>%
-  filter(!is.na(number), number != 0) %>%
-  select(reference, bio_reference, species_record_id, length_record_id, species, sl)
-
-# Count frequency of each length
-len_frq <- len_merged %>%
-  group_by(bio_reference, species, sl) %>%
-  summarise(count = n(), .groups = "drop") %>%
-  arrange(bio_reference, species, sl)
-
-# Count number of animals measured
-nl <- len_frq %>%
-  group_by(bio_reference, species) %>%
-  summarise(nl = sum(count), .groups = "drop")
-
-# Create final length dataset
-len_final <- len_frq %>%
-  left_join(nl, by = c("bio_reference", "species")) %>%
-  select(bio_reference, species, nl, count, sl) %>%
-  arrange(bio_reference, species)
 
 # CREATE COMBINED DATA==========================================================
 
 com <- fld %>%
-  left_join(hab_combined, by = "reference") %>%
-  left_join(hyd, by = "reference") %>%
-  left_join(wth_processed, by = "reference") %>%
-  left_join(num_totals, by = "reference") %>%
+  left_join(hab_combined, by = "Reference") %>%
+  left_join(hyd, by = "Reference") %>%
+  # left_join(wth_processed, by = "Reference") %>%
+  left_join(num_totals, by = "Reference","species") %>%
   mutate(
-    number = n,
+    number = N_Total,
     # Avoid upweighting 101 records
-    bottomvegcover = as.numeric(bottomvegcover),
-    bottomvegcover = ifelse(bottomvegcover == 101, 51, bottomvegcover)
+    BottomVegCover = as.numeric(BottomVegCover),
+    BottomVegCover = ifelse(BottomVegCover == 101, 51, BottomVegCover)
   ) %>%
-  select(-ovr_per, -ind_per, -n) %>%
-  arrange(bio_reference, species)
+  select(-ovr_per, -ind_per, -N_Total) %>%
+  arrange(Reference, species)
 
 # Select variables to keep
 keep_vars <- c(var0, var1, var2)
@@ -727,17 +624,12 @@ keep_vars <- keep_vars[keep_vars %in% names(com)]
 com <- com %>% select(all_of(keep_vars))
 
 # Export combined data
-write_csv(com, paste0(out, tolower(b), tolower(t), "_c.csv"))
+save(com, file = here("Output", paste0(tolower(b), tolower(t), "_c.RData")))
 
 # CREATE FINAL LENGTH DATASET==================================================
 
-len_with_com <- len_frq %>%
-  left_join(nl, by = c("bio_reference", "species")) %>%
-  inner_join(select(com, bio_reference, species), by = c("bio_reference", "species")) %>%
-  select(bio_reference, species, nl, count, sl)
-
 # Export length data
-write_csv(len_with_com, paste0(out, tolower(b), tolower(t), "_l.csv"))
+save(len_final, file=here("Output",paste0(tolower(b),tolower(t), "_l.RData")))
 
 # DATA CHECKS==================================================================
 
