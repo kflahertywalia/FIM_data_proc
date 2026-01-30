@@ -354,26 +354,26 @@ display: none;
 
 <div id="processing-fwc-fisheries-independent-monitoring-fim-data" class="section level1">
 <h1>Processing FWC Fisheries-Independent Monitoring (FIM) Data</h1>
-<p>The following code has revised from SAS into R to process FIM data
-into multi-species and single-species datasets for analyses. Two
-different pathways are needed to process each type of dataset. Each
-processing pathway has options to subset the data further by monitoring
-type (pulled out as a integer (x) in the data set name; m for standard
-monitoring, d for directed sampling, null for all monitoring, etc.),
-gear type, location (zone, bay segment, river), years or months sampled,
-etc. Use the most appropriate subset for the data analyses you are
-conducting.</p>
+<p>The following code has been revised from SAS into R (see <a href="https://github.com/kflahertywalia/FIM_data_proc/blob/main/SAS_to_R_conversion_notes">notes</a>)
+to process FIM data into multi-species and single-species datasets for
+analyses. Two different pathways are needed to process each type of
+dataset. Each processing pathway has options to subset the data further
+by monitoring type (pulled out as a integer (x) in the data set name; m
+for standard monitoring, d for directed sampling, null for all
+monitoring, etc.), gear type, location (zone, bay segment, river), years
+or months sampled, etc. Use the most appropriate subset for the data
+analyses you are conducting.</p>
 <p>Before processing, download the most current FIM data from () and, if
-needed, run <strong><em>tb_subset.R</em></strong> to subset all FIM data
-into Tampa Bay only.</p>
+needed, run <a href="https://github.com/kflahertywalia/FIM_data_proc/blob/main/R/tb_subset.R"><strong><em>tb_subset.R</em></strong></a>
+to subset all FIM data into Tampa Bay only.</p>
 <div id="multi-species-data-in-progress" class="section level2">
 <h2>Multi-species data (in progress):</h2>
 <ol style="list-style-type: decimal">
-<li><p>Run <strong><em>multi_comb_data_proc.R</em></strong> to process
-and subset the Tampa Bay data into two files:</p>
+<li><p>Run <a href="https://github.com/kflahertywalia/FIM_data_proc/blob/main/R/multi_comb_dat_proc.R"><strong><em>multi_comb_data_proc.R</em></strong></a>
+to process and subset the Tampa Bay data into two files:</p>
 <ul>
-<li><p>Count data (tbx_c.R)</p></li>
-<li><p>Length data (tbx_l.R):</p></li>
+<li><p>Count data (tbx_c.RData)</p></li>
+<li><p>Length data (tbx_l.RData):</p></li>
 </ul></li>
 <li><p>Run <strong><em>matrix_out.R</em></strong> to format data for
 multivariate analyses packages such as PRIMER by creating pseudospecies
@@ -382,9 +382,9 @@ tables:</p>
 <ul>
 <li><p>A species list defining column abbreviations: tbx_spp.R
 -</p></li>
-<li><p>Samples as rows and species and factors as columns
+<li><p>Samples as rows, species and factors as columns
 (tbx_num.R)</p></li>
-<li><p>Samples as rows and environmental data and factors as columns
+<li><p>Samples as rows, environmental data and factors as columns
 (tbx_env.R)</p></li>
 </ul></li>
 </ol>
@@ -400,8 +400,7 @@ files:</p>
 <li><p>Subset of the count data</p></li>
 <li><p>Fills no catch samples with zeros</p></li>
 </ul></li>
-<li><p>length data (tbx_l.R) - subset the length data by species and
-desired lengths</p></li>
+<li><p>length data (tbx_l.R) - subset the length data</p></li>
 </ul>
 </div>
 </div>
