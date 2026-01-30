@@ -93,7 +93,7 @@ save(TB_FIM_PhysicalMaster, file = here("Data", "TB_FIM_PhysicalMaster.RData"))
 save(TB_FIM_BiologyCounts, file = here("Data", "TB_FIM_BiologyCounts.RData"))
 save(TB_FIM_BiologyLengths, file = here("Data", "TB_FIM_BiologyLengths.RData"))
 save(TB_FIM_Habitat, file = here("Data", "TB_FIM_Habitat.RData"))
-save(TB_FIM_HydroLab, file = here("Data", "TB_FIM_HydroLab.RData"))
+save(TB_FIM_Hydrolab, file = here("Data", "TB_FIM_HydroLab.RData"))
 save(FIM_ReferenceCodes, file = here("Data", "FIM_ReferenceCodes.RData"))
  
  
