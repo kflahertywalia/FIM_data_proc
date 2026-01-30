@@ -7,7 +7,7 @@
 # Program Summary:
 # Used to subset the FIM program data when looking at multiple species.
 # Two datasets are output: one contains length data for each record within 
-# a field number (bio_reference, sl, nl, and count). The second dataset 
+# a field number (reference, species, sl, nl, and count, and weighting factor (wf)). The second dataset 
 # contains the number of fish data combined with the physical data.
 # =============================================================================
 
@@ -35,10 +35,6 @@ t <- "m"
 # Location of multi-year historic data for all estuaries
 # Google Drive path = TBEP_General/09_Tech_Projects/Gulf Ecosystem Initiative/Data/FIM/FIM_Data/
 in1 <- drive_get("https://drive.google.com/drive/u/0/folders/1pAuF3vakLXWw8wvpMgkl9YU6TvhJkKiJ")
-#Location of local data
-local <-here("Data/")
-# Location of processed data
-out <- here("Output/")
 
 # Select the years to be retained
 b_yr <- 1999
