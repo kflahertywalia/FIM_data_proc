@@ -26,28 +26,28 @@ library(tbeptools)
 # Bay to analyze
 b <- "TB"
 
-# Data type to analyze
-t <- "M"
+# Data type to analyze, "_" to include all data types
+t <- "_"
+
+# Filename suffix - to identify subset of data pulled (example: all, zone, gr, baysegment)
+s <- "all"
 
 # Select the years to be retained
-b_yr <- 1996
+b_yr <- 2000
 e_yr <- 2024
 
-# Select the projects to be retained
-p1 <- "AM"
-p2 <- "XX"
-p3 <- "XX"
-p4 <- "XX"
+# Select the projects to be retained, if not filtered "XX"
+p <- c("XX")
 
-# Select the gears to be retained
-g <- c("020","019","023")
+# Select the gears to be retained, if not filtered "XXX"
+g <- c("XXX")
 
-# Select zones to be retained (<="Z" all zones, or select specific zones)
+# Select zones to be retained ("Z" all zones, or select specific zones)
 # Zone filter will be applied as: 
-z <- c("A","B","C","D","E")
+z <- c("Z")
 
 ## Variable lists
-var0 <- c("Reference", "Scientificname","Commonname","species", "number","family","order","class")
+var0 <- c("Reference", "Scientificname","Commonname","species", "number","family","order","class","Taxa_Type")
 
 var1 <- c("Date", "StartTime", "Gear", "Rep", "Latitude", "Longitude", "Zone", "Grid",
           "Project_1", "Project_2", "Project_3", "Secchi_depth", "Secchi_on_bottom", "Stratum",
@@ -92,12 +92,21 @@ hyd <- TB_FIM_Hydrolab
 
 # Import FIM codes
 fim_codes <- FIM_ReferenceCodes
+
+#Import species codes
+spp_codes <- FIM_SpeciesCodes
                      
 # PROCESS PHYSICAL DATA========================================================
 
 fld <- fld1 %>%
-  #Filter by bay, zone
-  filter(Bay==b, Zone %in% z, !is.na(Latitude) & !is.na(Longitude)) %>%
+  #Filter by bay, no location, zone, type, project
+  filter(Bay==b, 
+         !is.na(Latitude) & !is.na(Longitude),
+         if(t == "_") TRUE else Type == t,
+         if(z == "Z") TRUE else Zone %in% z,
+         if(p == "XX") TRUE else any(c(Project1, Project2, Project3) %in% p),
+         Year >= b_yr & Year <= e_yr,
+         ) %>%
   
   # Combine similar gear types
   mutate(
@@ -146,7 +155,7 @@ fld <- fld1 %>%
   ) %>%
   
   # Filter for designated gears
-  filter(gr %in% g) %>%
+  filter(if(g == "XXX") TRUE else gr %in% g) %>%
   
   arrange(Reference)
 
@@ -158,7 +167,7 @@ ret <- fld %>%
 gis <- fld %>%
   select(Reference,gr,Latitude,Longitude)
 # Export station location data
-write_csv(gis, here("Output", paste0(tolower(b),tolower(t),"_gis.csv")))
+write_csv(gis, here("Output", paste0(tolower(b),tolower(t), tolower(s), "_gis.csv")))
 
 # PROCESS HYDROLAB DATA=========================================================
 
@@ -624,14 +633,14 @@ keep_vars <- keep_vars[keep_vars %in% names(com)]
 com <- com %>% select(all_of(keep_vars))
 
 # Export combined data
-save(com, file = here("Output", paste0(tolower(b), tolower(t), "_c.RData")))
+save(com, file = here("Output", paste0(tolower(b), tolower(t), s, "_c.RData")))
 
 # CREATE FINAL LENGTH DATASET==================================================
 
 # Export length data
-save(len_final, file=here("Output",paste0(tolower(b),tolower(t), "_l.RData")))
+save(len_final, file=here("Output",paste0(tolower(b),tolower(t), s,  "_l.RData")))
 
-# DATA CHECKS==================================================================
+# DATA CHECKS - not complete==================================================================
 
 # Setup species code database
 spp <- species_codes %>%
