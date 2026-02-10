@@ -1,6 +1,6 @@
-
+#Export species list
 spp <- com %>%
-  group_by(Scientificname,Commonname,Taxa_Type)%>%
+  group_by(Scientificname,Commonname,species,Taxa_Type)%>%
   summarise(total_count = sum(number, na.rm = TRUE),
             n_observations=n())
 write_csv(spp, here("Output", "tb_fim_species.csv"))
