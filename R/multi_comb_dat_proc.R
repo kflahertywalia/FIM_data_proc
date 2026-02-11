@@ -606,9 +606,10 @@ num_totals <- num %>%
 # PROCESS LENGTH DATA===========================================================
 
 # Subset length data
-len_final <- lng %>%
+len <- lng %>%
   arrange(Reference) %>%
-  inner_join(ret, by = "Reference") 
+  inner_join(ret, by = "Reference")%>%
+  rename(species = NODCCODE)
 
 
 # CREATE COMBINED DATA==========================================================
@@ -638,7 +639,7 @@ save(com, file = here("Output", paste0(tolower(b), tolower(t), s, "_c.RData")))
 # CREATE FINAL LENGTH DATASET==================================================
 
 # Export length data
-save(len_final, file=here("Output",paste0(tolower(b),tolower(t), s,  "_l.RData")))
+save(len, file=here("Output",paste0(tolower(b),tolower(t), s,  "_l.RData")))
 
 # DATA CHECKS - not complete==================================================================
 

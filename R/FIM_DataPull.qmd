@@ -1,0 +1,736 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Establish functions
+```{r}
+library(tidyverse)
+library(odbc)
+library(dbplyr)
+library(DBI)
+
+Connect_FIMSQL <- function(db = "FIMCorpInshore"){
+  dbConnect(odbc::odbc(),
+            driver = "ODBC Driver 17 for SQL Server",
+            server = "fwri-dev-managedinstance.0f14ee249d01.database.windows.net",
+            database = db,
+            uid = "FIMreader",
+            pwd = "Read1fish2fish!",
+            Encrypt = "Yes",
+            TrustServerCertificate = "No"
+            # server = "51SF4M3\\MICHAELLOCALSQL",
+            # Trusted_Connection = "Yes"
+  )
+}
+
+AnnRep_getPhysBio_data <- 
+  function(
+    yr 
+    # bay, 
+    # fishhealth = F,
+    # proj = c('AM','AS')
+  ){
+  # Name a connection for FIMCorpInshore (need to name it for use in next step(s))
+  conn <- Connect_FIMSQL("FIMCorpInshore")
+
+  # Physical data for all sets to get sampling effort and list of references
+  Phys1 <- 
+    tbl(
+      conn,
+      in_schema("hsdb", "tbl_corp_physical_master")
+    ) %>%
+    mutate(
+      Bay   = substring(Reference, 1, 2),
+      Type  = substring(Reference, 3,3),
+      Year  = as.numeric(substring(Reference, 4,7)),
+      Month = substring(Reference, 8,9),
+      .after = Sampling_Date
+    ) %>%
+    collect() %>%
+    filter(
+      # Bay %in% bay,
+      Year %in% yr,
+      # (Project_1 %in% proj | Project_2 %in% proj | Project_3 %in% proj),
+      # Type == "M"
+    ) %>%
+    mutate(
+      # Remove white space from Zone column
+      Zone = str_trim(
+        Zone, 
+        side = "both"
+      ),
+      Gear = case_when(
+        # 6.1-m seine
+        Gear %in% c(1,2) ~ 2,
+        # 9.1-m seine
+        Gear == 5 ~ 5,
+        # 21-m offshore seine
+        Gear %in% c(11,13,21,25,26,39,100:107) ~ 20,
+        # 21-m beach seine
+        Gear %in% c(12,22,24,27,28) ~ 22,
+        # 21-m boat seine
+        Gear %in% c(10,23) ~ 23,
+        # 61-m blocknet
+        Gear %in% c(153,154) ~ 153,
+        # 183-m haul seine
+        Gear %in% c(155,157,158,159,160) ~ 160,
+        # 183-m purse seine
+        Gear %in% c(170,431) ~ 170,
+        # 61-m haul seine
+        Gear == 180 ~ 180,
+        # Gillnets
+        Gear %in% c(204:209,403:406,409,410) ~ 207,
+        # 6.1-m otter trawl
+        Gear %in% c(300,301,306) ~ 300,
+        # 1-m roving dropnet
+        Gear %in% c(350,351,354) ~ 350,
+        .default = Gear
+      ),
+      # pad the Gear column with a zero so that it will sort properly later
+      Gear = formatC(
+        Gear, 
+        width = 3, 
+        flag = "0"
+      ),
+      # sometimes the Zone needs to be amended because of dual-coding with other
+      # projects, like JX tidal tribs with sub-zones
+      Zone = case_when(
+        Bay == "JX" & Zone %in% c("MC", "TR") ~ "C",
+        Bay == "JX" & Zone %in% c("OR", "AR") ~ "D",
+        .default = Zone
+      ), 
+      # Change bay for panhandle estuaries
+      Bay  = case_when(
+        Bay == "FW" & Zone == "A" ~ "SR",
+        Bay == "FW" & Zone %in% c("B","C") ~ "CB",
+        .default = Bay
+      ),
+      SAM = toupper(SAM)
+    ) %>%
+    select(
+      -c(
+        Flag,
+        Rep,
+        matches("Station"),
+        PrimaryInvestigator,
+        matches("Crew"),
+        matches("Instrument"),
+        RecordPerson,
+        Historic_Reference
+      )
+    ) %>%
+    arrange(
+      Sampling_Date,
+      Bay,
+      Type,
+      Reference
+    )
+  
+  FullRefsList <- 
+    Phys1 %>%
+    pull(Reference)
+  
+  # Pull in 'weather' data 
+  Clouds <- 
+    tbl(
+      conn, 
+      in_schema("hsdb", "tbl_corp_weather")
+    ) %>%
+    collect() %>%
+    filter(
+      # Earlier surveys recorded weather at the beginning and end of the survey.
+      # This resulted in duplicate entries which led to merging issues. Since
+      # there are at least an order of magnitude more "B" entries, felt
+      # justified in dropping those "E" values for consistency. Likewise, this
+      # only dropped a total of 4 values where the only record for that
+      # Reference was "E", and 3 of those 4 were NA for CloudCover, with the
+      # last being "0"
+      Beg_end == "B",
+      Reference %in% FullRefsList
+    ) %>%
+    select(
+      Reference,
+      CloudCover
+    )
+  
+  # Pull in the effort column for later calculation of fish/100m2
+  Gear_effort <- 
+    tbl(
+      conn, 
+      in_schema("hsdb", "tbl_corp_gear")
+    ) %>% 
+    select(
+      Reference, 
+      Dist_tow, 
+      Soaktime
+    ) %>%
+    collect() %>%
+    mutate(
+      Soaktime = hms::as_hms(Soaktime),
+      Soaktime = lubridate::minute(lubridate::hms(Soaktime))
+    ) %>%
+    filter(
+      Reference %in% FullRefsList
+    )
+  
+  # Pull in gear details
+  Gear_data <- 
+    tbl(
+      conn, 
+      in_schema("hsdb", "tbl_corp_gear")
+    ) %>%
+    collect() %>%
+    filter(
+      Reference %in% FullRefsList
+    ) %>%
+    select(
+      -Flag,
+      -Dist_tow,
+      -Soaktime
+    )
+  
+  Phys <- 
+    Phys1 %>%
+    left_join(
+      Clouds,
+      by = "Reference"
+    ) %>%
+    left_join(
+      Gear_effort, 
+      by = "Reference"
+    ) %>%
+    left_join(
+      Gear_data,
+      by = "Reference"
+    ) %>%
+    # remove white space from Zone column
+    mutate(
+      Zone = str_trim(Zone, side = "both")
+    ) %>%
+    # get effort expressed per 100m2
+    mutate(
+      Effort = case_when(
+         # 6.1-m seine
+        Gear == "002" ~ 31.17/100,
+        # 9.1-m seine
+        Gear == "005" ~ 11/100,
+        # 21-m offshore seine
+        Gear %in% c("019", "020") ~ 140/100,
+        # 21-m beach seine
+        Gear == "022" ~ 368/100,
+        # 21-m boat seine
+        Gear == "023" ~ 68/100,
+        # 61-m blocknet: No effort denoted; check procedure manual
+        Gear == "153" ~ NA, 
+        # 183-m haul seine
+        Gear == "160" ~ 4120/100,
+        # 183-m purse seine
+        Gear == "170" ~ 2209/100,
+        # 61-m haul seine
+        Gear == "180" ~ 465/100,
+        # Gillnets (in soaktime, not 100m2)
+        Gear == "207" ~ Soaktime/60,
+        # 6.1-m otter trawl
+        Gear == "300" & !is.na(Dist_tow) ~ (Dist_tow*4*1853)/100, # 1853 m in nautical mile
+        Gear == "300" & is.na(Dist_tow) & Soaktime > 1 ~ 0.2*Soaktime,
+        # 1-m roving dropnet
+        Gear == "350" ~ 1/100,
+        .default = NA
+      ),
+      .after = Gear
+    )
+  
+  rm(Clouds, Gear_effort, Gear_data, Phys1)
+
+  # Biology (number of animals) data for all sets to get all the animals
+  Bio2 <- 
+    tbl(
+      conn, 
+      in_schema("hsdb", "tbl_corp_biology_number")
+    ) %>%
+    select(
+      Reference, 
+      Species_record_id, 
+      Splittype, 
+      Splitlevel, 
+      SC,
+      Cells, 
+      NODCCODE, 
+      Number,
+      Use,
+      FHC
+    ) %>%
+    mutate(
+      Bay   = substring(Reference, 1, 2),
+      Type  = substring(Reference, 3,3),
+      Year  = as.numeric(substring(Reference, 4,7)),
+      Month = substring(Reference, 8,9),
+      .after = Reference
+    ) %>%
+    mutate(
+      SC    = toupper(SC)
+    ) %>%
+    collect() %>%
+    filter(
+      Reference %in% FullRefsList
+    ) %>%
+    left_join(
+      select(
+        Phys,
+        Reference,
+        Sampling_Date
+      ),
+      by = "Reference"
+    ) %>%
+    mutate(
+      Count = case_when(
+        !is.na(as.numeric(Splittype)) ~ Number*(as.numeric(Splittype)^as.numeric(Splitlevel)),
+        .default = as.numeric(Number)
+      )
+    ) %>%
+    mutate(
+      N = sum(Count),
+      .by = c(
+        Reference,
+        NODCCODE,
+        Splittype,
+        Splitlevel,
+        SC,
+      ),
+    ) %>%
+    select(
+      -c(
+        Number,
+        Count,
+        Use,
+        FHC,
+        Cells
+      )
+    ) %>%
+    relocate(
+      Sampling_Date,
+      .after = Reference
+    ) %>%
+    arrange(
+      Sampling_Date,
+      Bay,
+      Type,
+      Reference
+    )
+  
+  # Add in the scientific names and taxa type
+  Spp <- 
+    tbl(
+      conn,
+      in_schema("hsdb", "tbl_corp_ref_species_list")
+    ) %>%
+    select(
+      NODCCODE, 
+      Scientificname, 
+      Commonname
+    ) %>%
+    collect() %>%
+    #assign type of taxa based on NODCCODE
+    mutate(
+      Taxa_Type = case_when(
+        NODCCODE < '2000000000' ~ "Gear",
+        NODCCODE > '2000000000' & NODCCODE < '7000000000' ~ "Invert",
+        NODCCODE > '7000000000' & NODCCODE < '9000000000' ~ "Fish",
+        NODCCODE > '9000000000' & NODCCODE < '9900000000' ~ "Turtle",
+        NODCCODE > '9900000000' ~ 'Misc')
+    )
+  
+  Species_List <- 
+    tbl(
+      conn,
+      in_schema("hsdb", "tbl_corp_ref_species_list_selected")
+    ) %>%
+    collect() %>%
+    right_join(
+      Spp,
+      by = "NODCCODE"
+    ) %>%
+    replace_na(
+      list(
+        Inshore_selected_taxa = FALSE,
+        Offshore_selected_taxa = FALSE,
+        FIM_selected_taxa = FALSE
+      )
+    ) %>%
+    relocate(
+      Scientificname:Taxa_Type,
+      .after = NODCCODE
+    ) %>%
+    arrange(
+      NODCCODE
+    )
+  
+  Bio1 <- 
+    Bio2 %>%
+    left_join(
+      Spp, 
+      by = 'NODCCODE'
+    ) %>%
+    relocate(
+      N,
+      .after = Commonname
+    ) %>%
+    relocate(
+      Taxa_Type,
+      .after = NODCCODE
+    )
+  
+  # Gather length data for the selected References
+  Len1 <- 
+    tbl(
+      conn,
+      in_schema("hsdb", "tbl_corp_biology_lengths")
+    ) %>%
+    rename(
+      SL = Length
+    ) %>%
+    select(
+      -Flag
+    ) %>%
+    collect() %>%
+    filter(
+      Reference %in% FullRefsList,
+      !is.na(SL)
+    )
+
+  # Merge catch and length information
+  Len <-
+    Len1 %>%
+    left_join(
+      Bio1, 
+      by = c(
+        "Reference", 
+        "Species_record_id"
+      )
+    ) %>%
+    relocate(
+      c(Species_record_id, Length_record_id),
+      .before = NODCCODE
+    ) %>%
+    relocate(
+      SL,
+      .after = Commonname
+    ) %>%
+    # Number of fish where same SL was recorded
+    mutate(
+      N_at_length = n(),
+      .by = c(
+        Reference, 
+        Scientificname, 
+        Splittype, 
+        Splitlevel, 
+        SC, 
+        SL
+      )
+    ) %>%
+    # Look at the number measured in each species_record_id
+    mutate(
+      N_measured = n(),
+      .by = c(
+        Reference,
+        Scientificname,
+        Splittype,
+        Splitlevel, 
+        SC
+      )
+    ) %>%
+    # Total number of fish (inc. splitter est. from Bio data)
+    mutate(
+      N_total = sum(unique(N)),
+      .by = c(
+        Reference, 
+        Scientificname
+      )
+    ) %>%
+    select(
+      -c(
+        Splittype,
+        Splitlevel,
+        Species_record_id,
+        Length_record_id,
+        N
+      )
+    ) %>%
+    # Run distinct so that individuals with same measurement at a length are on same line
+    distinct(
+      Reference, 
+      Scientificname,
+      SL,
+      N_measured,
+      N_total,
+      N_at_length,
+      .keep_all = T
+    ) %>%
+    filter(
+      !is.na(SL)
+    ) %>%
+    # This now provides the same information as the length data set that is
+    # output from the sas program calculate ratio for fish per sz (SL), ceiling
+    # will round up the weighting factor to nearest integer so don't have o.5
+    mutate(
+      # wf is now the adjusted count of fish per record & is column to build LF
+      # distribution from
+      wf   = floor(0.5 + (N_at_length/N_measured)*N_total),
+    ) %>% 
+    arrange(
+      Sampling_Date,
+      Bay,
+      Type,
+      Reference,
+      Scientificname
+    )
+  
+  Bio <- 
+    Bio1 %>%
+    select(
+      -c(
+        Species_record_id,
+        Splittype,
+        Splitlevel
+      )
+    ) %>%
+    rename(
+      N_Total = N
+    ) %>%
+    distinct()
+    
+  # Remove the Bio1 data set to clean up the environment
+  rm("Bio1", "Bio2", "Len1")
+    
+  Habitat <- 
+    tbl(
+      conn, 
+      in_schema("hsdb", "tbl_corp_habitat")
+    ) %>%
+    collect() %>%
+    filter(
+      Reference %in% FullRefsList
+    ) %>%
+    mutate(
+      Bay   = substring(Reference, 1, 2),
+      Type  = substring(Reference, 3,3),
+      Year  = as.numeric(substring(Reference, 4,7)),
+      Month = substring(Reference, 8,9),
+      .after = Reference
+    ) %>%
+    left_join(
+      select(
+        Phys,
+        Reference,
+        Sampling_Date
+      ),
+      by = "Reference"
+    ) %>%
+    select(
+      -Flag
+    )
+  
+  Hydro <- 
+    tbl(
+      conn, 
+      in_schema("hsdb", "tbl_corp_hydrolab")
+    ) %>%
+    collect() %>%
+    filter(
+      Reference %in% FullRefsList
+    ) %>%
+    mutate(
+      Bay   = substring(Reference, 1, 2),
+      Type  = substring(Reference, 3,3),
+      Year  = as.numeric(substring(Reference, 4,7)),
+      Month = substring(Reference, 8,9),
+      .after = Reference
+    ) %>%
+    left_join(
+      select(
+        Phys,
+        Reference,
+        Sampling_Date
+      ),
+      by = "Reference"
+    ) %>%
+    select(
+      -Flag
+    ) 
+  
+  RefCodes <- 
+    tbl(
+      conn, 
+      in_schema("hsdb", "tbl_corp_ref_fim_codes")
+    ) %>%
+    collect()
+  
+  
+  # Disconnect from SQL database
+  dbDisconnect(conn)
+  rm("conn")  
+  
+  PhysBioList <- list(Phys, Bio, Len, Habitat, Hydro, RefCodes, Species_List)
+    
+  return(PhysBioList)
+}
+
+Split_data <- function(
+    df, 
+    output_file,
+    # threshold rows per file
+    max_rows = 1e6               
+  ){
+  
+  # Create output directory if it doesn't exist
+  if (!dir.exists("FIM_Data/")) dir.create("FIM_Data/")
+  
+  # Get unique years sorted
+  years <- sort(unique(df$Year))
+  
+  # Loop over years and split
+  current_start <- min(years)
+  
+  while (current_start <= max(years)) {
+    for (end_year in current_start:max(years)) {
+      temp_data <- 
+        df %>%
+        filter(
+          Year >= current_start &
+            Year <= end_year
+        )
+  
+      if (nrow(temp_data) > max_rows) {
+        final_year <- end_year - 1
+        break
+      } else {
+        final_year <- end_year
+      }
+    }
+    
+    temp_data <- 
+      df %>%
+      filter(
+        Year >= current_start &
+          Year <= final_year
+      )
+    
+    filename <- paste0("FIM_", output_file, "_", current_start, "-", final_year, ".csv")
+    write.csv(temp_data, file.path("FIM_Data/", filename), row.names = FALSE)
+    
+    current_start <- final_year + 1
+  }
+}
+
+# Re-import all saved files into a single data frame
+Import_data <- 
+  function(
+    input_dir
+  ){
+  csv_files <- list.files(input_dir, pattern = "\\.csv$", full.names = TRUE)
+
+  # Combine them
+  df_combined <- purrr::map_dfr(csv_files, read_csv)
+}
+```
+
+# Data Pull
+```{r}
+beg_year <- 1996
+end_year <- 2024
+
+dat <- 
+  AnnRep_getPhysBio_data(
+    yr   = beg_year:end_year 
+    # bay  = Bays, 
+    # proj = c('AM', 'AS', 'WI')
+  ) 
+
+# Bays <- c("FW", "SR", "CB", "SA", "AP", "BB", "CK", 
+#           "TB", "SB", "CH", "EV", "JX", "IR", "TQ")
+
+FIM_PhysicalMaster <- dat[[1]]
+FIM_BiologyCounts  <- dat[[2]]
+FIM_BiologyLengths <- dat[[3]]
+FIM_Habitat        <- dat[[4]]
+FIM_HydroLab       <- dat[[5]]
+FIM_ReferenceCodes <- dat[[6]]
+FIM_SpeciesCodes   <- dat[[7]]
+```
+
+# Data Split
+```{r}
+save(
+  FIM_PhysicalMaster,
+  file = "FIM_Data/FIM_PhysicalMaster.RData"
+)
+
+save(
+  FIM_BiologyCounts,
+  file = "FIM_Data/FIM_BiologyCounts.RData"
+)
+
+save(
+  FIM_BiologyLengths,
+  file = "FIM_Data/FIM_BiologyLengths.RData"
+)
+
+save(
+  FIM_Habitat,
+  file = "FIM_Data/FIM_Habitat.RData"
+)
+
+save(
+  FIM_HydroLab,
+  file = "FIM_Data/FIM_HydroLab.RData"
+)
+
+save(
+  FIM_ReferenceCodes,
+  file = "FIM_Data/FIM_ReferenceCodes.RData"
+)
+
+save(
+  FIM_SpeciesCodes,
+  file = "FIM_Data/FIM_SpeciesCodes.RData"
+)
+
+Split_data(
+  FIM_PhysicalMaster,
+  "PhysicalMaster"
+)
+
+Split_data(
+  FIM_BiologyCounts,
+  "BiologyCounts",
+)
+
+Split_data(
+  FIM_BiologyLengths,
+  "BiologyLengths",
+)
+
+Split_data(
+  FIM_Habitat,
+  "Habitat"
+)
+
+Split_data(
+  FIM_HydroLab ,
+  "HydroLab"
+)
+
+write.csv(
+  FIM_ReferenceCodes,
+  file.path("FIM_Data/FIM_ReferenceCodes.csv"),
+  row.names = FALSE
+)
+
+write.csv(
+  FIM_SpeciesCodes,
+  file.path("FIM_Data/FIM_SpeciesCodes.csv"),
+  row.names = FALSE
+)
+```
