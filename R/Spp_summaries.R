@@ -1,3 +1,15 @@
+###Subset all FIM data from GEI project data to just Tampa Bay
+
+# Load required libraries
+library(dplyr)
+library(tidyr)
+library(readr)
+library(lubridate)
+library(stringr)
+library(here)
+library(usethis)
+library(tbeptools)
+
 #Export species list
 spp <- com %>%
   group_by(Scientificname,Commonname,species,Taxa_Type)%>%

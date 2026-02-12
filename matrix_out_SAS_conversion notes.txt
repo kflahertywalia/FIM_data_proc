@@ -1,0 +1,32 @@
+Major Differences from SAS:
+
+Setup as a list instead of macro variables - All parameters are in the setup_params() function returning a named list
+Functions instead of macros - Each SAS macro is now a regular R function:
+
+to_boolean() - converts variables to boolean if specified
+assign_size_class_opt0/1/2/3() - handles different size classification schemes
+process_data() - main data processing pipeline
+write_outputs() - exports CSV files
+
+
+Tidyverse approach - Uses dplyr and tidyr for data manipulation instead of DATA steps and PROC SQL
+Filter functions - Gear, zone, year, and month filters are defined as functions in setup for flexibility
+Simplified flow - Linear execution flow without macro calls
+
+Key Features Preserved:
+
+All 4 size classification options (0-3)
+Genus-level grouping for small specimens
+Zero catch handling
+Boolean conversion options
+Environmental and catch data separation
+CSV output (avoids Excel's 255 column limit)
+All data filtering logic
+
+To Use:
+
+Update file paths in setup_params() to match your system
+Adjust filter functions as needed
+Run results <- main() to execute
+
+The code assumes your SAS datasets have been converted to CSV format. If you need to read SAS files directly, you can use the haven package's read_sas() function.
