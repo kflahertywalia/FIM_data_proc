@@ -74,21 +74,21 @@ bay_names <- list(
 bay <- bay_names[[toupper(b)]]
 
 # IMPORT DATA==================================================================
-#Bring in Tampa Bay subset populated to repository from tb_subset.R
+#Bring in bay subset populated to repository from SubsetbyBay.R
 # Import biology number data
-num <- TB_FIM_BiologyCounts
+num <- get(paste0(b, "_FIM_BiologyCounts"))
 
 # Import biology length data
-lng <- TB_FIM_BiologyLengths
+lng <- get(paste0(b, "_FIM_BiologyLengths"))
 
 # Import physical data
-fld1 <- TB_FIM_PhysicalMaster
+fld1 <- get(paste0(b, "_FIM_PhysicalMaster"))
 
 # Import habitat data
-hab <- TB_FIM_Habitat
+hab <- get(paste0(b, "_FIM_Habitat"))
 
 # Import hydrolab data
-hyd <- TB_FIM_Hydrolab
+hyd <- get(paste0(b, "_FIM_Hydrolab"))
 
 # Import FIM codes
 fim_codes <- FIM_ReferenceCodes
