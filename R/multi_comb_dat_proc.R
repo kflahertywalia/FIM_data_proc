@@ -1,8 +1,8 @@
 # =============================================================================
 # Program: multi_comb_dat_proc.R
-# Programmer: Converted from SAS by AI (Claude), checked by Kerry Flaherty Walia
+# Programmer: Converted from SAS by AI (Claude), revised and checked by Kerry Flaherty Walia
 # Original Author: Tim MacDonald, Kerry Flaherty Walia
-# Date: 27 January 2017
+# Original program date: 27 January 2017
 # 
 # Program Summary:
 # Used to subset the FIM program data when looking at multiple species.
